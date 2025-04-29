@@ -2,50 +2,51 @@ import streamlit as st
 from tensorflow.keras.models import model_from_json
 from PIL import Image, UnidentifiedImageError
 import numpy as np
-import matplotlib.pyplot as plt
+import os
 
-st.set_page_config(page_title="Classificador Dígits 1-9", layout="centered")
-st.title("🔢 Classificador de Dígits (1-9)")
-st.markdown("Puja una imatge (28x28 píxels, en escala de grisos) i la IA et dirà quin número veu! 🧠")
+# Configurar la pàgina
+st.set_page_config(page_title="Classificador de Dígits 1-9", layout="centered")
+st.title("🔢 Classificador de Dígits (1 al 9)")
+st.markdown("Puja una imatge de dígit escrit a mà i la IA et dirà quin número és. ✍️🧠")
 
-uploaded_file = st.file_uploader("📤 Pujar imatge (png, jpg)", type=["jpg", "jpeg", "png"])
+# Pujar imatge
+uploaded_file = st.file_uploader("📤 Pujar imatge (jpg, png)", type=["jpg", "jpeg", "png"])
 
-# Verificació d'existència de fitxers
+# Verificació dels fitxers del model
+if not os.path.exists("model_digits_1to9.json") or not os.path.exists("model_digits_1to9.weights.h5"):
+    st.error("❌ Fitxers del model no trobats. Assegura't que els arxius .json i .weights.h5 són al mateix directori.")
+    st.stop()
+
 try:
+    # Carregar estructura del model
     with open("model_digits_1to9.json", "r") as json_file:
         model_json = json_file.read()
     model = model_from_json(model_json)
+
+    # Carregar pesos
     model.load_weights("model_digits_1to9.weights.h5")
-except FileNotFoundError:
-    st.error("❌ El model no s'ha trobat. Assegura't que els fitxers JSON i WEIGHTS estiguin disponibles.")
+
+except Exception as e:
+    st.error(f"❌ Error carregant el model: {e}")
     st.stop()
 
+# Si hi ha una imatge pujada, processar-la
 if uploaded_file:
     try:
+        # Obrir i processar la imatge
         image = Image.open(uploaded_file).convert("L").resize((28, 28))
-        st.image(image, caption="📷 Imatge pujada", use_container_width=False)
+        st.image(image, caption='📷 Imatge pujada', use_container_width=True)
 
         img_array = np.array(image).astype("float32") / 255.0
         img_array = img_array.reshape(1, 28, 28, 1)
 
+        # Fer predicció
         prediction = model.predict(img_array)
-        predicted_class = int(np.argmax(prediction[0])) + 1  # Tornem a 1-9
+        predicted_class = np.argmax(prediction)
+        confidence = float(np.max(prediction))
 
-        st.success(f"✏️ El model creu que és un **{predicted_class}** amb {np.max(prediction[0])*100:.2f}% de confiança.")
-
-        # Mostrar gràfic de barres
-        st.subheader("📊 Probabilitats per cada dígit:")
-        fig, ax = plt.subplots()
-        bars = ax.bar([str(i+1) for i in range(9)], prediction[0], color="skyblue")
-        ax.set_xlabel("Dígits")
-        ax.set_ylabel("Probabilitat")
-        ax.set_ylim([0, 1])
-        ax.set_title("Distribució de confiança")
-        for bar in bars:
-            yval = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2.0, yval + 0.01, f"{yval:.2f}", ha='center', va='bottom')
-        st.pyplot(fig)
+        # Com que els digits anaven de 1 a 9 i es van restar 1, afegim 1 per mostrar el valor original
+        st.success(f"El model prediu que és un **{predicted_class + 1}** amb una confiança del **{confidence * 100:.2f}%**.")
 
     except UnidentifiedImageError:
-        st.error("❌ No s'ha pogut llegir la imatge. Si us plau, puja un arxiu vàlid.")
-
+        st.error("❌ No s'ha pogut llegir la imatge. Posa una imatge vàlida (jpg, png).")
